@@ -408,6 +408,10 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 		},
 	}
 
+	if openAIReq.Model == "nano-banana-pro" {
+		modelConfigs[0]["image_size"] = "2k"
+	}
+
 	// 创建消息数组
 	var messages []map[string]interface{}
 
