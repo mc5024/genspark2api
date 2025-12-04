@@ -80,6 +80,7 @@ var MixtureModelList = []string{
 
 var ImageModelList = []string{
 	"fal-ai/nano-banana",
+	"nano-banana-pro",
 	"fal-ai/bytedance/seedream/v4",
 	"gpt-image-1",
 	"flux-pro/ultra",
