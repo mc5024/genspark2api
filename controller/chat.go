@@ -228,7 +228,7 @@ func processUrl(c *gin.Context, client cycletls.CycleTLS, cookie string, url str
 	// 判断是否为URL
 	if strings.HasPrefix(url, "http://") || strings.HasPrefix(url, "https://") {
 		// 下载文件
-		bytes, err := fetchImageBytes(url)
+		bytes, err := fetchImageBytes(url, cookie)
 		if err != nil {
 			logger.Errorf(c.Request.Context(), fmt.Sprintf("fetchImageBytes err  %v\n", err))
 			return fmt.Errorf("fetchImageBytes err  %v\n", err)
@@ -325,12 +325,26 @@ func processBytes(c *gin.Context, client cycletls.CycleTLS, cookie string, bytes
 }
 
 // 获取文件字节数组的函数
-func fetchImageBytes(url string) ([]byte, error) {
-	resp, err := http.Get(url)
+func fetchImageBytes(url string, cookie string) ([]byte, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// 设置必要的请求头
+	req.Header.Set("Cookie", cookie)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("http.Get err: %v\n", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("received non-200 status code: %d", resp.StatusCode)
+	}
 
 	return ioutil.ReadAll(resp.Body)
 }
@@ -420,7 +434,7 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 
 		if strings.HasPrefix(openAIReq.Image, "http://") || strings.HasPrefix(openAIReq.Image, "https://") {
 			// 下载文件
-			bytes, err := fetchImageBytes(openAIReq.Image)
+			bytes, err := fetchImageBytes(openAIReq.Image, cookie)
 			if err != nil {
 				logger.Errorf(c.Request.Context(), fmt.Sprintf("fetchImageBytes err  %v\n", err))
 				return nil, fmt.Errorf("fetchImageBytes err  %v\n", err)
@@ -1677,13 +1691,23 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 				RevisedPrompt: openAIReq.Prompt,
 			}
 
+			bytes, err := fetchImageBytes(data.URL, cookie)
+			if err != nil {
+				logger.Errorf(ctx, "fetchImageBytes error: %v", err)
+				continue
+			}
+
+			contentType := http.DetectContentType(bytes)
+			base64Str := base64.StdEncoding.EncodeToString(bytes)
+
+			// 构造 data URI
+			dataURI := fmt.Sprintf("data:%s;base64,%s", contentType, base64Str)
+
+			// 无论是哪种模式，都把 URL 替换为 dataURI，因为原始 URL 无法直接访问
+			data.URL = dataURI
+
 			if openAIReq.ResponseFormat == "b64_json" {
-				base64Str, err := getBase64ByUrl(data.URL)
-				if err != nil {
-					logger.Errorf(ctx, "getBase64ByUrl error: %v", err)
-					continue
-				}
-				data.B64Json = "data:image/webp;base64," + base64Str
+				data.B64Json = dataURI
 			}
 
 			result.Data = append(result.Data, data)
@@ -1839,8 +1863,18 @@ func pollTaskStatus(c *gin.Context, client cycletls.CycleTLS, taskIDs []string, 
 	return imageURLs
 }
 
-func getBase64ByUrl(url string) (string, error) {
-	resp, err := http.Get(url)
+func getBase64ByUrl(url string, cookie string) (string, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// 设置必要的请求头
+	req.Header.Set("Cookie", cookie)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch image: %w", err)
 	}

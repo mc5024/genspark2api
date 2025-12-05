@@ -219,7 +219,7 @@ func createVideoRequestBody(c *gin.Context, cookie string, openAIReq *model.Vide
 
 		if strings.HasPrefix(openAIReq.Image, "http://") || strings.HasPrefix(openAIReq.Image, "https://") {
 			// 下载文件
-			bytes, err := fetchImageBytes(openAIReq.Image)
+			bytes, err := fetchImageBytes(openAIReq.Image, cookie)
 			if err != nil {
 				logger.Errorf(c.Request.Context(), fmt.Sprintf("fetchImageBytes err  %v\n", err))
 				return nil, fmt.Errorf("fetchImageBytes err  %v\n", err)
