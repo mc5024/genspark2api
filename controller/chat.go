@@ -1045,22 +1045,51 @@ func cheat(requestBody map[string]interface{}, c *gin.Context, cookie string) (m
 			config.RecaptchaProxyUrl += "/"
 		}
 
-		// 创建请求
-		req, err := http.NewRequest("GET", fmt.Sprintf("%sgenspark", config.RecaptchaProxyUrl), nil)
-		if err != nil {
-			logger.Errorf(c.Request.Context(), fmt.Sprintf("创建/genspark请求失败   %v\n", err))
-			return nil, err
+		var resp *http.Response
+		var err error
+		maxRetries := 3 // 最大重试次数
+
+		for i := 0; i < maxRetries; i++ {
+			// 创建请求
+			req, reqErr := http.NewRequest("GET", fmt.Sprintf("%sgenspark", config.RecaptchaProxyUrl), nil)
+			if reqErr != nil {
+				logger.Errorf(c.Request.Context(), fmt.Sprintf("创建/genspark请求失败: %v\n", reqErr))
+				return nil, reqErr
+			}
+
+			// 设置请求头
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Cookie", cookie)
+
+			// 发送请求
+			resp, err = client.Do(req)
+			if err == nil && resp.StatusCode == 200 {
+				// 如果请求成功且状态码为 200，跳出循环
+				break
+			}
+
+			// 如果出错或状态码不为 200，记录日志并重试
+			if err != nil {
+				logger.Warnf(c.Request.Context(), "Attempt %d/%d failed: 发送/genspark请求失败: %v", i+1, maxRetries, err)
+			} else {
+				logger.Warnf(c.Request.Context(), "Attempt %d/%d failed: 状态码 %d", i+1, maxRetries, resp.StatusCode)
+				resp.Body.Close() // 关闭之前的响应体
+			}
+
+			// 如果不是最后一次尝试，等待一小段时间
+			if i < maxRetries-1 {
+				time.Sleep(2 * time.Second)
+			}
 		}
 
-		// 设置请求头
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Cookie", cookie)
-
-		// 发送请求
-		resp, err := client.Do(req)
+		// 如果重试完还是失败
 		if err != nil {
-			logger.Errorf(c.Request.Context(), fmt.Sprintf("发送/genspark请求失败   %v\n", err))
+			logger.Errorf(c.Request.Context(), fmt.Sprintf("所有重试均失败，最后一次错误: %v\n", err))
 			return nil, err
+		}
+		if resp.StatusCode != 200 {
+			logger.Errorf(c.Request.Context(), fmt.Sprintf("所有重试均失败，最后一次状态码: %d\n", resp.StatusCode))
+			return nil, fmt.Errorf("failed to get token after retries, status code: %d", resp.StatusCode)
 		}
 		defer resp.Body.Close()
 
