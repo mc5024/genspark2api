@@ -559,7 +559,7 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 
 			// 如果不是最后一次尝试，等待一小段时间
 			if i < maxRetries-1 {
-				time.Sleep(2 * time.Second)
+				time.Sleep(1 * time.Second)
 			}
 		}
 
