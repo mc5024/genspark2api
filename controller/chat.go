@@ -429,15 +429,29 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 	// 创建消息数组
 	var messages []map[string]interface{}
 
+	// 收集所有图片
+	var images []string
 	if openAIReq.Image != "" {
+		images = append(images, openAIReq.Image)
+	}
+	if len(openAIReq.Images) > 0 {
+		images = append(images, openAIReq.Images...)
+	}
+
+	// 去重（可选，这里暂不去重）
+
+	var contentList []map[string]interface{}
+
+	// 处理所有图片
+	for _, imgUrl := range images {
 		var base64Data string
 
-		if strings.HasPrefix(openAIReq.Image, "http://") || strings.HasPrefix(openAIReq.Image, "https://") {
+		if strings.HasPrefix(imgUrl, "http://") || strings.HasPrefix(imgUrl, "https://") {
 			// 下载文件
-			bytes, err := fetchImageBytes(openAIReq.Image, cookie)
+			bytes, err := fetchImageBytes(imgUrl, cookie)
 			if err != nil {
 				logger.Errorf(c.Request.Context(), fmt.Sprintf("fetchImageBytes err  %v\n", err))
-				return nil, fmt.Errorf("fetchImageBytes err  %v\n", err)
+				continue // 如果下载失败，跳过该图片，或者返回错误
 			}
 
 			contentType := http.DetectContentType(bytes)
@@ -445,34 +459,40 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 				// 是图片类型，转换为base64
 				base64Data = "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(bytes)
 			}
-		} else if common.IsImageBase64(openAIReq.Image) {
+		} else if common.IsImageBase64(imgUrl) {
 			// 如果已经是 base64 格式
-			if !strings.HasPrefix(openAIReq.Image, "data:image") {
-				base64Data = "data:image/jpeg;base64," + openAIReq.Image
+			if !strings.HasPrefix(imgUrl, "data:image") {
+				base64Data = "data:image/jpeg;base64," + imgUrl
 			} else {
-				base64Data = openAIReq.Image
+				base64Data = imgUrl
 			}
 		}
 
-		// 构建包含图片的消息
 		if base64Data != "" {
-			messages = []map[string]interface{}{
-				{
-					"role": "user",
-					"content": []map[string]interface{}{
-						{
-							"type": "image_url",
-							"image_url": map[string]interface{}{
-								"url": base64Data,
-							},
-						},
-						{
-							"type": "text",
-							"text": openAIReq.Prompt,
-						},
-					},
+			contentList = append(contentList, map[string]interface{}{
+				"type": "image_url",
+				"image_url": map[string]interface{}{
+					"url": base64Data,
 				},
-			}
+			})
+		}
+	}
+
+	// 添加文本提示词
+	if openAIReq.Prompt != "" {
+		contentList = append(contentList, map[string]interface{}{
+			"type": "text",
+			"text": openAIReq.Prompt,
+		})
+	}
+
+	// 构建包含图片的消息
+	if len(contentList) > 0 {
+		messages = []map[string]interface{}{
+			{
+				"role":    "user",
+				"content": contentList,
+			},
 		}
 	}
 
