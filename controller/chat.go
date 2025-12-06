@@ -465,6 +465,7 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 	// 去重（可选，这里暂不去重）
 
 	var contentList []map[string]interface{}
+	imageCount := 0
 
 	// 处理所有图片
 	for _, imgUrl := range images {
@@ -483,14 +484,17 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 				// 是图片类型，转换为base64
 				base64Data = "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(bytes)
 			}
-		} else if common.IsImageBase64(imgUrl) {
-			// 如果已经是 base64 格式
-			if !strings.HasPrefix(imgUrl, "data:image") {
-				base64Data = "data:image/jpeg;base64," + imgUrl
-			} else {
-				base64Data = imgUrl
-			}
-		}
+    } else if common.IsImageBase64(imgUrl) {
+        if !strings.HasPrefix(imgUrl, "data:image") {
+            base64Data = "data:image/jpeg;base64," + imgUrl
+        } else {
+            base64Data = imgUrl
+        }
+    } else {
+        if _, err := base64.StdEncoding.DecodeString(imgUrl); err == nil {
+            base64Data = "data:image/jpeg;base64," + imgUrl
+        }
+    }
 
 		if base64Data != "" {
 			contentList = append(contentList, map[string]interface{}{
@@ -499,7 +503,12 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 					"url": base64Data,
 				},
 			})
+			imageCount++
 		}
+	}
+
+	if imageCount > 0 {
+		logger.Infof(c.Request.Context(), fmt.Sprintf("Multi-image: received %d, attached %d", len(images), imageCount))
 	}
 
 	// 添加文本提示词
