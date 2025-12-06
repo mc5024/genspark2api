@@ -409,11 +409,35 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 	if openAIReq.Model == "dall-e-3" {
 		openAIReq.Model = "dalle-3"
 	}
+
+	aspectRatio := "auto"
+	if openAIReq.AspectRatio != "" {
+		aspectRatio = openAIReq.AspectRatio
+	} else if openAIReq.Size != "" {
+		switch openAIReq.Size {
+		case "1024x1024":
+			aspectRatio = "1:1"
+		case "1024x1792":
+			aspectRatio = "9:16"
+		case "1792x1024":
+			aspectRatio = "16:9"
+		default:
+			// 如果 size 是类似 "16:9" 这样的格式，直接使用
+			if strings.Contains(openAIReq.Size, ":") {
+				aspectRatio = openAIReq.Size
+			} else {
+				// 尝试解析 size，这里简单处理，如果没有匹配到常用尺寸，仍然使用 auto 或者默认 1:1
+				// 用户也可以直接传 aspect_ratio
+				// aspectRatio = "1:1" 
+			}
+		}
+	}
+
 	// 创建模型配置
 	modelConfigs := []map[string]interface{}{
 		{
 			"model":                   openAIReq.Model,
-			"aspect_ratio":            "auto",
+			"aspect_ratio":            aspectRatio,
 			"use_personalized_models": false,
 			"fashion_profile_id":      nil,
 			"hd":                      false,
@@ -548,7 +572,7 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 
 		var resp *http.Response
 		var err error
-		maxRetries := 3 // 最大重试次数
+		maxRetries := 5 // 最大重试次数
 
 		for i := 0; i < maxRetries; i++ {
 			// 创建请求
@@ -579,7 +603,7 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 
 			// 如果不是最后一次尝试，等待一小段时间
 			if i < maxRetries-1 {
-				time.Sleep(1 * time.Second)
+				time.Sleep(2 * time.Second)
 			}
 		}
 

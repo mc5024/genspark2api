@@ -138,6 +138,8 @@ type OpenAIImagesGenerationRequest struct {
 	ResponseFormat string   `json:"response_format"`
 	Image          string   `json:"image"`
 	Images         []string `json:"images"`
+	Size           string   `json:"size"`
+	AspectRatio    string   `json:"aspect_ratio"`
 }
 
 type VideosGenerationRequest struct {
