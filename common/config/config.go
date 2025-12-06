@@ -36,6 +36,7 @@ var ReasoningHide = env.Int("REASONING_HIDE", 0)
 var PRE_MESSAGES_JSON = env.String("PRE_MESSAGES_JSON", "")
 
 var RateLimitCookieLockDuration = env.Int("RATE_LIMIT_COOKIE_LOCK_DURATION", 10*60)
+var RateLimitCookieLockEnable = env.Int("RATE_LIMIT_COOKIE_LOCK_ENABLE", 0)
 
 // 路由前缀
 var RoutePrefix = env.String("ROUTE_PREFIX", "")
@@ -60,7 +61,7 @@ var RateLimitKeyExpirationDuration = 20 * time.Minute
 var RequestOutTimeDuration = 5 * time.Minute
 
 var (
-	RequestRateLimitNum            = env.Int("REQUEST_RATE_LIMIT", 60)
+	RequestRateLimitNum            = env.Int("REQUEST_RATE_LIMIT", 600)
 	RequestRateLimitDuration int64 = 1 * 60
 )
 
@@ -73,10 +74,12 @@ var (
 )
 
 func AddRateLimitCookie(cookie string, expirationTime time.Time) {
-	rateLimitCookies.Store(cookie, RateLimitCookie{
-		ExpirationTime: expirationTime,
-	})
-	//fmt.Printf("Storing cookie: %s with value: %+v\n", cookie, RateLimitCookie{ExpirationTime: expirationTime})
+    if RateLimitCookieLockEnable == 0 {
+        return
+    }
+    rateLimitCookies.Store(cookie, RateLimitCookie{
+        ExpirationTime: expirationTime,
+    })
 }
 
 type CookieManager struct {
@@ -149,20 +152,20 @@ func NewCookieManager() *CookieManager {
 			continue // 忽略空字符串
 		}
 
-		// 检查是否在 RateLimitCookies 中
-		if value, ok := rateLimitCookies.Load(cookie); ok {
-			rateLimitCookie, ok := value.(RateLimitCookie) // 正确转换为 RateLimitCookie
-			if !ok {
-				continue
-			}
-			if rateLimitCookie.ExpirationTime.After(time.Now()) {
-				// 如果未过期，忽略该 cookie
-				continue
-			} else {
-				// 如果已过期，从 RateLimitCookies 中删除
-				rateLimitCookies.Delete(cookie)
-			}
-		}
+        // 检查是否在 RateLimitCookies 中
+        if RateLimitCookieLockEnable != 0 {
+            if value, ok := rateLimitCookies.Load(cookie); ok {
+                rateLimitCookie, ok := value.(RateLimitCookie)
+                if !ok {
+                    continue
+                }
+                if rateLimitCookie.ExpirationTime.After(time.Now()) {
+                    continue
+                } else {
+                    rateLimitCookies.Delete(cookie)
+                }
+            }
+        }
 
 		// 添加到有效 cookie 列表
 		validCookies = append(validCookies, cookie)
@@ -175,11 +178,14 @@ func NewCookieManager() *CookieManager {
 }
 
 func IsRateLimited(cookie string) bool {
-	if value, ok := rateLimitCookies.Load(cookie); ok {
-		rateLimitCookie := value.(RateLimitCookie)
-		return rateLimitCookie.ExpirationTime.After(time.Now())
-	}
-	return false
+    if RateLimitCookieLockEnable == 0 {
+        return false
+    }
+    if value, ok := rateLimitCookies.Load(cookie); ok {
+        rateLimitCookie := value.(RateLimitCookie)
+        return rateLimitCookie.ExpirationTime.After(time.Now())
+    }
+    return false
 }
 
 func (cm *CookieManager) RemoveCookie(cookieToRemove string) error {
