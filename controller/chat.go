@@ -466,21 +466,31 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 
 	var contentList []map[string]interface{}
 
-    // 处理所有图片
-    for _, imgUrl := range images {
-        var base64Data string
+	// 处理所有图片
+	for _, imgUrl := range images {
+		var base64Data string
 
-        if strings.HasPrefix(imgUrl, "http://") || strings.HasPrefix(imgUrl, "https://") {
-            // 改为直接传递链接形式，不再转为 base64
-            base64Data = imgUrl
-        } else if common.IsImageBase64(imgUrl) {
-            // 如果已经是 base64 格式
-            if !strings.HasPrefix(imgUrl, "data:image") {
-                base64Data = "data:image/jpeg;base64," + imgUrl
-            } else {
-                base64Data = imgUrl
-            }
-        }
+		if strings.HasPrefix(imgUrl, "http://") || strings.HasPrefix(imgUrl, "https://") {
+			// 下载文件
+			bytes, err := fetchImageBytes(imgUrl, cookie)
+			if err != nil {
+				logger.Errorf(c.Request.Context(), fmt.Sprintf("fetchImageBytes err  %v\n", err))
+				continue // 如果下载失败，跳过该图片，或者返回错误
+			}
+
+			contentType := http.DetectContentType(bytes)
+			if strings.HasPrefix(contentType, "image/") {
+				// 是图片类型，转换为base64
+				base64Data = "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(bytes)
+			}
+		} else if common.IsImageBase64(imgUrl) {
+			// 如果已经是 base64 格式
+			if !strings.HasPrefix(imgUrl, "data:image") {
+				base64Data = "data:image/jpeg;base64," + imgUrl
+			} else {
+				base64Data = imgUrl
+			}
+		}
 
 		if base64Data != "" {
 			contentList = append(contentList, map[string]interface{}{
