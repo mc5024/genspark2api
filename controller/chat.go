@@ -1822,13 +1822,15 @@ func getBase64ByUrl(url string, cookie string) (string, error) {
 	fullCookie := config.GetFullCookie(cookie)
 	
 	req.Header.Set("Cookie", fullCookie)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome")
-	req.Header.Set("Referer", "https://www.genspark.ai/")
-	req.Header.Set("Origin", "https://www.genspark.ai")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
-	// 下载图片不走代理，直连通常更快
+	// 支持重定向，并在重定向时保留 Cookie
 	client := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 60 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			req.Header.Set("Cookie", fullCookie)
+			return nil
+		},
 	}
 	
 	fmt.Printf("[getBase64ByUrl] 开始下载: %s\n", url)
@@ -1894,12 +1896,14 @@ func ImageProxy(c *gin.Context) {
 	}
 
 	req.Header.Set("Cookie", fullCookie)
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome")
-	req.Header.Set("Referer", "https://www.genspark.ai/")
-	req.Header.Set("Origin", "https://www.genspark.ai")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
 
 	client := &http.Client{
 		Timeout: 60 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			req.Header.Set("Cookie", fullCookie)
+			return nil
+		},
 	}
 
 	resp, err := client.Do(req)
