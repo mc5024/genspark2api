@@ -16,6 +16,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"time"
 )
@@ -1813,10 +1814,26 @@ func getBase64ByUrl(url string, cookie string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
-	req.Header.Set("Cookie", cookie)
+	
+	// 补充必要的 Cookie 字段
+	fullCookie := cookie + "; gslogin=1"
+	req.Header.Set("Cookie", fullCookie)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome")
+	req.Header.Set("Referer", "https://www.genspark.ai/")
+	req.Header.Set("Origin", "https://www.genspark.ai")
 
 	client := &http.Client{}
+	
+	// 如果配置了代理，使用代理
+	if config.ProxyUrl != "" {
+		proxyURL, err := neturl.Parse(config.ProxyUrl)
+		if err == nil {
+			client.Transport = &http.Transport{
+				Proxy: http.ProxyURL(proxyURL),
+			}
+		}
+	}
+	
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch image: %w", err)
