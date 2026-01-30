@@ -405,12 +405,16 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 	if imageSize == "" {
 		imageSize = "2k"
 	}
+	aspectRatio := openAIReq.AspectRatio
+	if aspectRatio == "" {
+		aspectRatio = "auto"
+	}
 
 	// 创建模型配置
 	modelConfigs := []map[string]interface{}{
 		{
 			"model":                   openAIReq.Model,
-			"aspect_ratio":            "auto",
+			"aspect_ratio":            aspectRatio,
 			"use_personalized_models": false,
 			"fashion_profile_id":      nil,
 			"hd":                      false,
