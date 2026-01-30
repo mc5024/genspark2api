@@ -86,8 +86,9 @@ type CookieManager struct {
 }
 
 var (
-	GSCookies    []string   // 存储所有的 cookies
-	cookiesMutex sync.Mutex // 保护 GSCookies 的互斥锁
+	GSCookies     []string   // 存储提取的 session_id cookies（用于 API 请求）
+	GSFullCookies []string   // 存储完整的 cookies（用于下载图片）
+	cookiesMutex  sync.Mutex // 保护 GSCookies 的互斥锁
 )
 
 // InitGSCookies 初始化 GSCookies
@@ -96,19 +97,60 @@ func InitGSCookies() {
 	defer cookiesMutex.Unlock()
 
 	GSCookies = []string{}
+	GSFullCookies = []string{}
 
 	// 从环境变量中读取 GS_COOKIE 并拆分为切片
 	cookieStr := os.Getenv("GS_COOKIE")
 	if cookieStr != "" {
 
 		for _, cookie := range strings.Split(cookieStr, ",") {
-			// 如果 cookie 不包含 "session_id="，则添加前缀
-			if !strings.Contains(cookie, "session_id=") {
-				cookie = "session_id=" + cookie
+			cookie = strings.TrimSpace(cookie)
+			if cookie == "" {
+				continue
 			}
-			GSCookies = append(GSCookies, cookie)
+			
+			// 保存完整的 cookie
+			GSFullCookies = append(GSFullCookies, cookie)
+			
+			// 提取 session_id 部分用于 API 请求
+			sessionCookie := extractSessionID(cookie)
+			GSCookies = append(GSCookies, sessionCookie)
 		}
 	}
+}
+
+// extractSessionID 从完整 cookie 中提取 session_id
+func extractSessionID(fullCookie string) string {
+	// 按分号分割
+	parts := strings.Split(fullCookie, ";")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "session_id=") {
+			return part
+		}
+	}
+	// 如果没找到 session_id=，检查是否本身就是 session_id 值
+	if !strings.Contains(fullCookie, "=") {
+		return "session_id=" + fullCookie
+	}
+	// 如果不包含 session_id=，添加前缀
+	if !strings.Contains(fullCookie, "session_id=") {
+		return "session_id=" + fullCookie
+	}
+	return fullCookie
+}
+
+// GetFullCookie 根据 session cookie 获取对应的完整 cookie
+func GetFullCookie(sessionCookie string) string {
+	cookiesMutex.Lock()
+	defer cookiesMutex.Unlock()
+	
+	for i, sc := range GSCookies {
+		if sc == sessionCookie && i < len(GSFullCookies) {
+			return GSFullCookies[i]
+		}
+	}
+	return sessionCookie
 }
 
 // RemoveCookie 删除指定的 cookie（支持并发）

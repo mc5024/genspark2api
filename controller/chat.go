@@ -1815,8 +1815,8 @@ func getBase64ByUrl(url string, cookie string) (string, error) {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 	
-	// 补充必要的 Cookie 字段
-	fullCookie := cookie + "; gslogin=1"
+	// 获取完整的 cookie 用于下载图片
+	fullCookie := config.GetFullCookie(cookie)
 	req.Header.Set("Cookie", fullCookie)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome")
 	req.Header.Set("Referer", "https://www.genspark.ai/")
