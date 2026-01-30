@@ -1822,16 +1822,9 @@ func getBase64ByUrl(url string, cookie string) (string, error) {
 	req.Header.Set("Referer", "https://www.genspark.ai/")
 	req.Header.Set("Origin", "https://www.genspark.ai")
 
-	client := &http.Client{}
-	
-	// 如果配置了代理，使用代理
-	if config.ProxyUrl != "" {
-		proxyURL, err := neturl.Parse(config.ProxyUrl)
-		if err == nil {
-			client.Transport = &http.Transport{
-				Proxy: http.ProxyURL(proxyURL),
-			}
-		}
+	// 下载图片不走代理，直连通常更快
+	client := &http.Client{
+		Timeout: 30 * time.Second,
 	}
 	
 	resp, err := client.Do(req)
