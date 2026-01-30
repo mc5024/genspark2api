@@ -395,6 +395,17 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 	if openAIReq.Model == "dall-e-3" {
 		openAIReq.Model = "dalle-3"
 	}
+
+	// 设置默认值
+	style := openAIReq.Style
+	if style == "" {
+		style = "auto"
+	}
+	imageSize := openAIReq.ImageSize
+	if imageSize == "" {
+		imageSize = "2k"
+	}
+
 	// 创建模型配置
 	modelConfigs := []map[string]interface{}{
 		{
@@ -404,7 +415,8 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 			"fashion_profile_id":      nil,
 			"hd":                      false,
 			"reflection_enabled":      false,
-			"style":                   "auto",
+			"style":                   style,
+			"image_size":              imageSize,
 		},
 	}
 

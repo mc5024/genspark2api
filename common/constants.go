@@ -34,6 +34,7 @@ var DefaultOpenaiModelList = []string{
 	"flux-pro/ultra",
 	"flux-pro/kontext/pro",
 	"imagen4",
+	"nano-banana-pro",
 	"sora-2",
 	"sora-2-pro",
 	"gemini/veo3",
@@ -87,6 +88,7 @@ var ImageModelList = []string{
 	"flux-pro/ultra",
 	"flux-pro/kontext/pro",
 	"imagen4",
+	"nano-banana-pro",
 }
 
 var VideoModelList = []string{
