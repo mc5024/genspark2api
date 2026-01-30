@@ -26,6 +26,7 @@ func SetApiRouter(router *gin.Engine) {
 	v1Router.POST("/images/generations", controller.ImagesForOpenAI)
 	v1Router.POST("/videos/generations", controller.VideosForOpenAI)
 	v1Router.GET("/models", controller.OpenaiModels)
+	v1Router.GET("/images/proxy", controller.ImageProxy)
 }
 
 func ProcessPath(path string) string {

@@ -16,6 +16,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	neturl "net/url"
 	"strings"
 	"time"
 )
@@ -1640,14 +1641,17 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 
 		// Process image URLs
 		for _, url := range imageURLs {
+			// 将原始 URL 转换为代理 URL
+			proxyURL := fmt.Sprintf("/v1/images/proxy?url=%s", neturl.QueryEscape(url))
+			
 			data := &model.OpenAIImagesGenerationDataResponse{
-				URL:           url,
+				URL:           proxyURL,
 				RevisedPrompt: openAIReq.Prompt,
 			}
 
 			if openAIReq.ResponseFormat == "b64_json" {
 				fmt.Printf("[ImageProcess] 开始转换 base64...\n")
-				base64Str, err := getBase64ByUrl(data.URL, cookie)
+				base64Str, err := getBase64ByUrl(url, cookie)
 				if err != nil {
 					logger.Errorf(ctx, "getBase64ByUrl error: %v", err)
 					continue
@@ -1860,4 +1864,64 @@ func safeClose(client cycletls.CycleTLS) {
 	if client.RespChan != nil {
 		close(client.RespChan)
 	}
+}
+
+
+// ImageProxy 图片代理下载接口
+func ImageProxy(c *gin.Context) {
+	imageURL := c.Query("url")
+	if imageURL == "" {
+		c.JSON(400, gin.H{"error": "url parameter is required"})
+		return
+	}
+
+	// 获取一个有效的 cookie
+	cookieManager := config.NewCookieManager()
+	cookie, err := cookieManager.GetRandomCookie()
+	if err != nil {
+		c.JSON(500, gin.H{"error": "no valid cookies available"})
+		return
+	}
+
+	// 获取完整 cookie
+	fullCookie := config.GetFullCookie(cookie)
+
+	// 创建请求
+	req, err := http.NewRequest("GET", imageURL, nil)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed to create request"})
+		return
+	}
+
+	req.Header.Set("Cookie", fullCookie)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome")
+	req.Header.Set("Referer", "https://www.genspark.ai/")
+	req.Header.Set("Origin", "https://www.genspark.ai")
+
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "failed to fetch image"})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(resp.StatusCode, gin.H{"error": fmt.Sprintf("upstream returned %d", resp.StatusCode)})
+		return
+	}
+
+	// 设置响应头
+	contentType := resp.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "image/webp"
+	}
+	c.Header("Content-Type", contentType)
+	c.Header("Cache-Control", "public, max-age=3600")
+
+	// 流式传输图片
+	io.Copy(c.Writer, resp.Body)
 }
