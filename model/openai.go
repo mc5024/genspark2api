@@ -133,12 +133,13 @@ type OpenAIDelta struct {
 
 type OpenAIImagesGenerationRequest struct {
 	OpenAIChatCompletionExtraRequest
-	Model          string `json:"model"`
-	Prompt         string `json:"prompt"`
-	ResponseFormat string `json:"response_format"`
-	Image          string `json:"image"`
-	Style          string `json:"style"`
-	ImageSize      string `json:"image_size"`
+	Model          string   `json:"model"`
+	Prompt         string   `json:"prompt"`
+	ResponseFormat string   `json:"response_format"`
+	Image          string   `json:"image"`
+	Images         []string `json:"images"`
+	Style          string   `json:"style"`
+	ImageSize      string   `json:"image_size"`
 }
 
 type VideosGenerationRequest struct {
