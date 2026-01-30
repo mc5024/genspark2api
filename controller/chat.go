@@ -1641,24 +1641,9 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 
 		// Process image URLs
 		for _, url := range imageURLs {
-			// 将原始 URL 转换为代理 URL
-			proxyURL := fmt.Sprintf("/v1/images/proxy?url=%s", neturl.QueryEscape(url))
-			
 			data := &model.OpenAIImagesGenerationDataResponse{
-				URL:           proxyURL,
+				URL:           url,
 				RevisedPrompt: openAIReq.Prompt,
-			}
-
-			if openAIReq.ResponseFormat == "b64_json" {
-				fmt.Printf("[ImageProcess] 开始转换 base64...\n")
-				base64Str, err := getBase64ByUrl(url, cookie)
-				if err != nil {
-					logger.Errorf(ctx, "getBase64ByUrl error: %v", err)
-					continue
-				}
-				fmt.Printf("[ImageProcess] base64 转换完成, 长度: %d\n", len(base64Str))
-				data.B64Json = "data:image/webp;base64," + base64Str
-				fmt.Printf("[ImageProcess] 设置 B64Json 完成\n")
 			}
 
 			result.Data = append(result.Data, data)
@@ -1872,6 +1857,8 @@ func safeClose(client cycletls.CycleTLS) {
 // ImageProxy 图片代理下载接口
 func ImageProxy(c *gin.Context) {
 	imageURL := c.Query("url")
+	fmt.Printf("[ImageProxy] 收到请求: %s\n", imageURL)
+	
 	if imageURL == "" {
 		c.JSON(400, gin.H{"error": "url parameter is required"})
 		return
@@ -1887,6 +1874,7 @@ func ImageProxy(c *gin.Context) {
 
 	// 获取完整 cookie
 	fullCookie := config.GetFullCookie(cookie)
+	fmt.Printf("[ImageProxy] Cookie长度: %d\n", len(fullCookie))
 
 	// 创建请求
 	req, err := http.NewRequest("GET", imageURL, nil)
@@ -1906,12 +1894,16 @@ func ImageProxy(c *gin.Context) {
 		},
 	}
 
+	fmt.Printf("[ImageProxy] 开始请求上游...\n")
 	resp, err := client.Do(req)
 	if err != nil {
+		fmt.Printf("[ImageProxy] 请求失败: %v\n", err)
 		c.JSON(500, gin.H{"error": "failed to fetch image"})
 		return
 	}
 	defer resp.Body.Close()
+	
+	fmt.Printf("[ImageProxy] 上游状态码: %d\n", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
 		c.JSON(resp.StatusCode, gin.H{"error": fmt.Sprintf("upstream returned %d", resp.StatusCode)})
@@ -1926,6 +1918,8 @@ func ImageProxy(c *gin.Context) {
 	c.Header("Content-Type", contentType)
 	c.Header("Cache-Control", "public, max-age=3600")
 
+	fmt.Printf("[ImageProxy] 开始传输数据...\n")
 	// 流式传输图片
-	io.Copy(c.Writer, resp.Body)
+	n, _ := io.Copy(c.Writer, resp.Body)
+	fmt.Printf("[ImageProxy] 传输完成, 大小: %d bytes\n", n)
 }
