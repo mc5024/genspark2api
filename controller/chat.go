@@ -1809,8 +1809,6 @@ func pollTaskStatus(c *gin.Context, client cycletls.CycleTLS, taskIDs []string, 
 }
 
 func getBase64ByUrl(url string, cookie string) (string, error) {
-	logger.Infof(nil, "开始下载图片: %s", url)
-	
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
@@ -1818,7 +1816,6 @@ func getBase64ByUrl(url string, cookie string) (string, error) {
 	
 	// 获取完整的 cookie 用于下载图片
 	fullCookie := config.GetFullCookie(cookie)
-	logger.Infof(nil, "使用Cookie: %s", fullCookie[:50]+"...")
 	
 	req.Header.Set("Cookie", fullCookie)
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome")
@@ -1830,15 +1827,15 @@ func getBase64ByUrl(url string, cookie string) (string, error) {
 		Timeout: 30 * time.Second,
 	}
 	
-	logger.Infof(nil, "发送下载请求...")
+	fmt.Printf("[getBase64ByUrl] 开始下载: %s\n", url)
 	resp, err := client.Do(req)
 	if err != nil {
-		logger.Errorf(nil, "下载请求失败: %v", err)
+		fmt.Printf("[getBase64ByUrl] 下载失败: %v\n", err)
 		return "", fmt.Errorf("failed to fetch image: %w", err)
 	}
 	defer resp.Body.Close()
 	
-	logger.Infof(nil, "下载响应状态码: %d", resp.StatusCode)
+	fmt.Printf("[getBase64ByUrl] 状态码: %d\n", resp.StatusCode)
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("received non-200 status code: %d", resp.StatusCode)
@@ -1849,7 +1846,7 @@ func getBase64ByUrl(url string, cookie string) (string, error) {
 		return "", fmt.Errorf("failed to read image data: %w", err)
 	}
 	
-	logger.Infof(nil, "图片下载完成, 大小: %d bytes", len(imgData))
+	fmt.Printf("[getBase64ByUrl] 下载完成, 大小: %d bytes\n", len(imgData))
 
 	// Encode the image data to Base64
 	base64Str := base64.StdEncoding.EncodeToString(imgData)
