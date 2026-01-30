@@ -16,7 +16,7 @@ RUN go mod download
 
 # 复制整个项目并构建可执行文件
 COPY . .
-RUN go build -o /genspark2api
+RUN go get github.com/gin-contrib/gzip && go build -o /genspark2api
 
 # 使用 Alpine 镜像作为最终镜像
 FROM alpine
