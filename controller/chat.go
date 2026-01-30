@@ -1452,24 +1452,19 @@ func OpenaiModels(c *gin.Context) {
 func ImagesForOpenAI(c *gin.Context) {
 
 	client := cycletls.Init()
-	defer safeClose(client)
 
 	var openAIReq model.OpenAIImagesGenerationRequest
 	if err := c.BindJSON(&openAIReq); err != nil {
+		safeClose(client)
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	// 初始化cookie
-	//cookieManager := config.NewCookieManager()
-	//cookie, err := cookieManager.GetRandomCookie()
-	//
-	//if err != nil {
-	//	logger.Errorf(c.Request.Context(), "Failed to get initial cookie: %v", err)
-	//	c.JSON(http.StatusInternalServerError, gin.H{"error": errNoValidCookies})
-	//	return
-	//}
 
 	resp, err := ImageProcess(c, client, openAIReq)
+	
+	// 异步关闭 client，避免阻塞响应
+	go safeClose(client)
+	
 	if err != nil {
 		logger.Errorf(c.Request.Context(), fmt.Sprintf("ImageProcess err  %v\n", err))
 		c.JSON(http.StatusInternalServerError, model.OpenAIErrorResponse{
