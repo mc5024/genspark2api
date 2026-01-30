@@ -1651,7 +1651,7 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 			}
 
 			if openAIReq.ResponseFormat == "b64_json" {
-				base64Str, err := getBase64ByUrl(data.URL)
+				base64Str, err := getBase64ByUrl(data.URL, cookie)
 				if err != nil {
 					logger.Errorf(ctx, "getBase64ByUrl error: %v", err)
 					continue
@@ -1808,8 +1808,16 @@ func pollTaskStatus(c *gin.Context, client cycletls.CycleTLS, taskIDs []string, 
 	return imageURLs
 }
 
-func getBase64ByUrl(url string) (string, error) {
-	resp, err := http.Get(url)
+func getBase64ByUrl(url string, cookie string) (string, error) {
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Cookie", cookie)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch image: %w", err)
 	}
