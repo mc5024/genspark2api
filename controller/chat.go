@@ -1651,19 +1651,24 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 			}
 
 			if openAIReq.ResponseFormat == "b64_json" {
+				fmt.Printf("[ImageProcess] 开始转换 base64...\n")
 				base64Str, err := getBase64ByUrl(data.URL, cookie)
 				if err != nil {
 					logger.Errorf(ctx, "getBase64ByUrl error: %v", err)
 					continue
 				}
+				fmt.Printf("[ImageProcess] base64 转换完成, 长度: %d\n", len(base64Str))
 				data.B64Json = "data:image/webp;base64," + base64Str
+				fmt.Printf("[ImageProcess] 设置 B64Json 完成\n")
 			}
 
 			result.Data = append(result.Data, data)
+			fmt.Printf("[ImageProcess] 添加到结果完成\n")
 		}
 
 		// Handle successful case
 		if len(result.Data) > 0 {
+			fmt.Printf("[ImageProcess] 准备返回结果, 数据条数: %d\n", len(result.Data))
 			// Delete temporary session if needed
 			if config.AutoDelChat == 1 {
 				go func() {
