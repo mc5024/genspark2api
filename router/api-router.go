@@ -5,13 +5,14 @@ import (
 	"genspark2api/common/config"
 	"genspark2api/controller"
 	"genspark2api/middleware"
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"strings"
 )
 
 func SetApiRouter(router *gin.Engine) {
 	router.Use(middleware.CORS())
-	//router.Use(gzip.Gzip(gzip.DefaultCompression))
+	router.Use(gzip.Gzip(gzip.DefaultCompression))
 	router.Use(middleware.IPBlacklistMiddleware())
 	router.Use(middleware.RequestRateLimit())
 
