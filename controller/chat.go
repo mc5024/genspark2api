@@ -1504,6 +1504,7 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 		errRateLimitMsg   = "Rate limit reached, please try again later"
 		errServerErrMsg   = "An error occurred with the current request, please try again"
 		errNoValidTaskIDs = "No valid task IDs received"
+		errSessionLimit   = "Session limit reached"
 	)
 
 	var (
@@ -1599,6 +1600,34 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 				c.JSON(http.StatusInternalServerError, gin.H{"error": errNoValidCookies})
 				return nil, fmt.Errorf(errNoValidCookies)
 				//}
+			}
+			continue
+		case common.IsSessionLimit(body):
+			// 提取重置时间
+			resetTime := common.ExtractSessionLimitResetTime(body)
+			var resetInfo string
+			if resetTime > 0 {
+				resetAt := time.Unix(resetTime, 0)
+				remaining := time.Until(resetAt)
+				hours := int(remaining.Hours())
+				minutes := int(remaining.Minutes()) % 60
+				resetInfo = fmt.Sprintf("Rate limit reached. Resets in %dh %dm (at %s)", hours, minutes, resetAt.Format("2006-01-02 15:04:05"))
+			} else {
+				resetInfo = "Rate limit reached"
+			}
+			logger.Warnf(ctx, "Session limit reached for cookie, switching to next cookie, attempt %d/%d, COOKIE:%s, Info: %s", attempt+1, maxRetries, cookie, resetInfo)
+			
+			// 将 cookie 加入限制列表，使用重置时间或默认 5 小时
+			if resetTime > 0 {
+				config.AddRateLimitCookie(cookie, time.Unix(resetTime, 0))
+			} else {
+				config.AddRateLimitCookie(cookie, time.Now().Add(5*time.Hour))
+			}
+			
+			cookie, err = cookieManager.GetNextCookie()
+			if err != nil {
+				logger.Errorf(ctx, "No more valid cookies available after attempt %d", attempt+1)
+				return nil, fmt.Errorf(resetInfo)
 			}
 			continue
 		case common.IsNotLogin(body):

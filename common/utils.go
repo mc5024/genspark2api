@@ -8,6 +8,7 @@ import (
 	_ "github.com/pkoukk/tiktoken-go"
 	"math/rand"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -206,6 +207,26 @@ func IsFreeLimit(data string) bool {
 	}
 
 	return false
+}
+
+// IsSessionLimit 检测 5 小时会话限制
+func IsSessionLimit(data string) bool {
+	return strings.Contains(data, `"type": "ACTION_SESSION_LIMIT"`) ||
+		strings.Contains(data, `"session_limit_exceeded": true`)
+}
+
+// ExtractSessionLimitResetTime 从响应中提取限制重置时间
+func ExtractSessionLimitResetTime(data string) int64 {
+	// 匹配 {time:1770030184} 格式
+	re := regexp.MustCompile(`\{time:(\d+)\}`)
+	matches := re.FindStringSubmatch(data)
+	if len(matches) >= 2 {
+		timestamp, err := strconv.ParseInt(matches[1], 10, 64)
+		if err == nil {
+			return timestamp
+		}
+	}
+	return 0
 }
 
 func IsServiceUnavailablePage(data string) bool {
