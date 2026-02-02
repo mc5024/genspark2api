@@ -208,40 +208,6 @@ func IsFreeLimit(data string) bool {
 	return false
 }
 
-// IsImageSessionLimit 检测图片生成的会话限制
-func IsImageSessionLimit(data string) bool {
-	return strings.Contains(data, `"type": "ACTION_SESSION_LIMIT"`) ||
-		strings.Contains(data, `"session_limit_exceeded": true`)
-}
-
-// ExtractRateLimitResetTime 从响应中提取速率限制重置时间
-func ExtractRateLimitResetTime(data string) int64 {
-	// 匹配 {time:数字} 格式
-	re := regexp.MustCompile(`\{time:(\d+)\}`)
-	matches := re.FindStringSubmatch(data)
-	if len(matches) >= 2 {
-		var resetTime int64
-		fmt.Sscanf(matches[1], "%d", &resetTime)
-		return resetTime
-	}
-	return 0
-}
-
-// FormatRateLimitError 格式化速率限制错误信息
-func FormatRateLimitError(resetTime int64) string {
-	if resetTime > 0 {
-		resetTimeObj := time.Unix(resetTime, 0)
-		remaining := time.Until(resetTimeObj)
-		if remaining > 0 {
-			hours := int(remaining.Hours())
-			minutes := int(remaining.Minutes()) % 60
-			return fmt.Sprintf("Rate limit reached. Resets in %dh %dm (at %s)", 
-				hours, minutes, resetTimeObj.Format("2006-01-02 15:04:05"))
-		}
-	}
-	return "Rate limit reached, please try again later"
-}
-
 func IsServiceUnavailablePage(data string) bool {
 	// 检查基本的 HTML 结构
 	htmlPattern := `^<!doctype html><html.*?><head>.*?</head><body.*?>.*?</body></html>`

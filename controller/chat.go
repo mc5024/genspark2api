@@ -1559,18 +1559,6 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 
 		// Handle different response cases
 		switch {
-		case common.IsImageSessionLimit(body):
-			// 提取重置时间并返回详细错误信息
-			resetTime := common.ExtractRateLimitResetTime(body)
-			errMsg := common.FormatRateLimitError(resetTime)
-			logger.Warnf(ctx, "Image session limit reached, reset time: %d, COOKIE:%s", resetTime, cookie)
-			config.AddRateLimitCookie(cookie, time.Now().Add(time.Duration(config.RateLimitCookieLockDuration)*time.Second))
-			cookie, err = cookieManager.GetNextCookie()
-			if err != nil {
-				logger.Errorf(ctx, "No more valid cookies available after attempt %d", attempt+1)
-				return nil, fmt.Errorf(errMsg)
-			}
-			continue
 		case common.IsRateLimit(body):
 			logger.Warnf(ctx, "Cookie rate limited, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
 			//if sessionImageChatManager != nil {
