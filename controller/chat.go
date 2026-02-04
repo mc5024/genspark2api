@@ -1512,6 +1512,7 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 		maxRetries              int
 		cookie                  string
 		chatId                  string
+		lastError               string // 记录最后一次错误
 	)
 
 	cookieManager := config.NewCookieManager()
@@ -1532,6 +1533,11 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 	} else {
 		maxRetries = sessionImageChatManager.GetSize()
 		cookie, chatId, _ = sessionImageChatManager.GetRandomKeyValue()
+	}
+
+	// 只有一个 cookie 时不重试
+	if maxRetries <= 1 {
+		maxRetries = 1
 	}
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
@@ -1561,45 +1567,29 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 		// Handle different response cases
 		switch {
 		case common.IsRateLimit(body):
-			logger.Warnf(ctx, "Cookie rate limited, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
-			//if sessionImageChatManager != nil {
-			//	cookie, chatId, err = sessionImageChatManager.GetNextKeyValue()
-			//	if err != nil {
-			//		logger.Errorf(ctx, "No more valid cookies available after attempt %d", attempt+1)
-			//		c.JSON(http.StatusInternalServerError, gin.H{"error": errNoValidCookies})
-			//		return nil, fmt.Errorf(errNoValidCookies)
-			//	}
-			//} else {
-			//cookieManager := config.NewCookieManager()
+			lastError = fmt.Sprintf("Cookie rate limited, response: %s", body)
+			logger.Warnf(ctx, "Cookie rate limited, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
 			config.AddRateLimitCookie(cookie, time.Now().Add(time.Duration(config.RateLimitCookieLockDuration)*time.Second))
+			if maxRetries == 1 {
+				return nil, fmt.Errorf("rate limit reached: %s", body)
+			}
 			cookie, err = cookieManager.GetNextCookie()
 			if err != nil {
 				logger.Errorf(ctx, "No more valid cookies available after attempt %d", attempt+1)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": errNoValidCookies})
-				return nil, fmt.Errorf(errNoValidCookies)
-				//}
+				return nil, fmt.Errorf("rate limit, no more cookies: %s", lastError)
 			}
 			continue
 		case common.IsFreeLimit(body):
-			logger.Warnf(ctx, "Cookie free rate limited, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
-			//if sessionImageChatManager != nil {
-			//	cookie, chatId, err = sessionImageChatManager.GetNextKeyValue()
-			//	if err != nil {
-			//		logger.Errorf(ctx, "No more valid cookies available after attempt %d", attempt+1)
-			//		c.JSON(http.StatusInternalServerError, gin.H{"error": errNoValidCookies})
-			//		return nil, fmt.Errorf(errNoValidCookies)
-			//	}
-			//} else {
-			//cookieManager := config.NewCookieManager()
+			lastError = fmt.Sprintf("Cookie free rate limited, response: %s", body)
+			logger.Warnf(ctx, "Cookie free rate limited, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
 			config.AddRateLimitCookie(cookie, time.Now().Add(24*60*60*time.Second))
-			// 删除cookie
-			//config.RemoveCookie(cookie)
+			if maxRetries == 1 {
+				return nil, fmt.Errorf("free limit reached: %s", body)
+			}
 			cookie, err = cookieManager.GetNextCookie()
 			if err != nil {
 				logger.Errorf(ctx, "No more valid cookies available after attempt %d", attempt+1)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": errNoValidCookies})
-				return nil, fmt.Errorf(errNoValidCookies)
-				//}
+				return nil, fmt.Errorf("free limit, no more cookies: %s", lastError)
 			}
 			continue
 		case common.IsSessionLimit(body):
@@ -1615,7 +1605,8 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 			} else {
 				resetInfo = "Rate limit reached"
 			}
-			logger.Warnf(ctx, "Session limit reached for cookie, switching to next cookie, attempt %d/%d, COOKIE:%s, Info: %s", attempt+1, maxRetries, cookie, resetInfo)
+			lastError = fmt.Sprintf("Session limit: %s, response: %s", resetInfo, body)
+			logger.Warnf(ctx, "Session limit reached, attempt %d/%d, COOKIE:%s, Info: %s", attempt+1, maxRetries, cookie, resetInfo)
 			
 			// 将 cookie 加入限制列表，使用重置时间或默认 5 小时
 			if resetTime > 0 {
@@ -1624,6 +1615,9 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 				config.AddRateLimitCookie(cookie, time.Now().Add(5*time.Hour))
 			}
 			
+			if maxRetries == 1 {
+				return nil, fmt.Errorf(resetInfo)
+			}
 			cookie, err = cookieManager.GetNextCookie()
 			if err != nil {
 				logger.Errorf(ctx, "No more valid cookies available after attempt %d", attempt+1)
@@ -1631,61 +1625,57 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 			}
 			continue
 		case common.IsNotLogin(body):
-			logger.Warnf(ctx, "Cookie Not Login, switching to next cookie, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
-			//if sessionImageChatManager != nil {
-			//	//sessionImageChatManager.RemoveKey(cookie)
-			//	cookie, chatId, err = sessionImageChatManager.GetNextKeyValue()
-			//	if err != nil {
-			//		logger.Errorf(ctx, "No more valid cookies available after attempt %d", attempt+1)
-			//		c.JSON(http.StatusInternalServerError, gin.H{"error": errNoValidCookies})
-			//		return nil, fmt.Errorf(errNoValidCookies)
-			//	}
-			//} else {
-			//cookieManager := config.NewCookieManager()
-			//err := cookieManager.RemoveCookie(cookie)
-			//if err != nil {
-			//	logger.Errorf(ctx, "Failed to remove cookie: %v", err)
-			//}
+			lastError = fmt.Sprintf("Cookie not login, response: %s", body)
+			logger.Warnf(ctx, "Cookie Not Login, attempt %d/%d, COOKIE:%s", attempt+1, maxRetries, cookie)
+			if maxRetries == 1 {
+				return nil, fmt.Errorf("cookie not login: %s", body)
+			}
 			cookie, err = cookieManager.GetNextCookie()
 			if err != nil {
 				logger.Errorf(ctx, "No more valid cookies available after attempt %d", attempt+1)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": errNoValidCookies})
-				return nil, fmt.Errorf(errNoValidCookies)
-				//}
-
+				return nil, fmt.Errorf("not login, no more cookies: %s", lastError)
 			}
 			continue
 		case common.IsServerError(body):
-			logger.Errorf(ctx, errServerErrMsg)
-			return nil, fmt.Errorf(errServerErrMsg)
+			logger.Errorf(ctx, "Server error: %s", body)
+			return nil, fmt.Errorf("server error: %s", body)
 		case common.IsServerOverloaded(body):
-			//logger.Errorf(ctx, fmt.Sprintf("Server overloaded, please try again later.%s", "官方服务超载或环境变量 SESSION_IMAGE_CHAT_MAP 未配置"))
-			logger.Errorf(ctx, fmt.Sprintf("Server overloaded, please try again later.%s", "官方服务超载"))
-			return nil, fmt.Errorf("Server overloaded, please try again later.")
+			logger.Errorf(ctx, "Server overloaded: %s", body)
+			return nil, fmt.Errorf("server overloaded: %s", body)
 		}
 
 		// Extract task IDs
 		projectId, taskIDs := extractTaskIDs(response.Body)
 		if len(taskIDs) == 0 {
-			logger.Errorf(ctx, "Response body: %s", response.Body)
-			return nil, fmt.Errorf(errNoValidTaskIDs)
+			logger.Errorf(ctx, "No task IDs in response: %s", response.Body)
+			return nil, fmt.Errorf("%s, response: %s", errNoValidTaskIDs, response.Body)
 		}
 
 		// Poll for image URLs
-		imageURLs := pollTaskStatus(c, client, taskIDs, cookie)
-		if len(imageURLs) == 0 {
-			logger.Warnf(ctx, "No image URLs received, retrying with next cookie")
+		pollResult := pollTaskStatus(c, client, taskIDs, cookie)
+		if pollResult.Error != nil {
+			logger.Errorf(ctx, "Poll task status error: %v", pollResult.Error)
+			return nil, pollResult.Error
+		}
+		
+		if len(pollResult.ImageURLs) == 0 {
+			lastError = fmt.Sprintf("No image URLs received: %s", pollResult.ErrDetail)
+			logger.Errorf(ctx, "No image URLs received: %s", pollResult.ErrDetail)
+			if maxRetries == 1 {
+				return nil, fmt.Errorf("image generation failed: %s", pollResult.ErrDetail)
+			}
+			// 多个 cookie 时才重试
 			continue
 		}
 
 		// Create response object
 		result := &model.OpenAIImagesGenerationResponse{
 			Created: time.Now().Unix(),
-			Data:    make([]*model.OpenAIImagesGenerationDataResponse, 0, len(imageURLs)),
+			Data:    make([]*model.OpenAIImagesGenerationDataResponse, 0, len(pollResult.ImageURLs)),
 		}
 
 		// Process image URLs
-		for _, url := range imageURLs {
+		for _, url := range pollResult.ImageURLs {
 			data := &model.OpenAIImagesGenerationDataResponse{
 				URL:           url,
 				RevisedPrompt: openAIReq.Prompt,
@@ -1711,7 +1701,10 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 	}
 
 	// All retries exhausted
-	logger.Errorf(ctx, "All cookies exhausted after %d attempts", maxRetries)
+	logger.Errorf(ctx, "All cookies exhausted after %d attempts, last error: %s", maxRetries, lastError)
+	if lastError != "" {
+		return nil, fmt.Errorf("all attempts failed: %s", lastError)
+	}
 	return nil, fmt.Errorf("all cookies are temporarily unavailable")
 }
 func extractTaskIDs(responseBody string) (string, []string) {
@@ -1773,8 +1766,17 @@ func extractTaskIDs(responseBody string) (string, []string) {
 	return projectId, taskIDs
 }
 
-func pollTaskStatus(c *gin.Context, client cycletls.CycleTLS, taskIDs []string, cookie string) []string {
-	var imageURLs []string
+// PollTaskResult 包含轮询结果和错误信息
+type PollTaskResult struct {
+	ImageURLs []string
+	Error     error
+	ErrDetail string
+}
+
+func pollTaskStatus(c *gin.Context, client cycletls.CycleTLS, taskIDs []string, cookie string) *PollTaskResult {
+	result := &PollTaskResult{
+		ImageURLs: []string{},
+	}
 
 	requestData := map[string]interface{}{
 		"task_ids": taskIDs,
@@ -1782,8 +1784,8 @@ func pollTaskStatus(c *gin.Context, client cycletls.CycleTLS, taskIDs []string, 
 
 	jsonData, err := json.Marshal(requestData)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to marshal request data"})
-		return imageURLs
+		result.Error = fmt.Errorf("failed to marshal request data: %v", err)
+		return result
 	}
 
 	sseChan, err := client.DoSSE("https://www.genspark.ai/api/ig_tasks_status", cycletls.Options{
@@ -1802,18 +1804,21 @@ func pollTaskStatus(c *gin.Context, client cycletls.CycleTLS, taskIDs []string, 
 	}, "POST")
 	if err != nil {
 		logger.Errorf(c, "Failed to make stream request: %v", err)
-		return imageURLs
+		result.Error = fmt.Errorf("failed to make stream request: %v", err)
+		return result
 	}
+
+	var lastData string
 	for response := range sseChan {
 		if response.Done {
-			//logger.Warnf(c.Request.Context(), response.Data)
-			return imageURLs
+			break
 		}
 
 		data := response.Data
 		if data == "" {
 			continue
 		}
+		lastData = data
 
 		logger.Debug(c.Request.Context(), strings.TrimSpace(data))
 
@@ -1826,12 +1831,21 @@ func pollTaskStatus(c *gin.Context, client cycletls.CycleTLS, taskIDs []string, 
 			if finalStatus, ok := responseData["final_status"].(map[string]interface{}); ok {
 				for _, taskID := range taskIDs {
 					if task, exists := finalStatus[taskID].(map[string]interface{}); exists {
-						if status, ok := task["status"].(string); ok && status == "SUCCESS" {
+						status, _ := task["status"].(string)
+						if status == "SUCCESS" {
 							if urls, ok := task["image_urls"].([]interface{}); ok && len(urls) > 0 {
 								if imageURL, ok := urls[0].(string); ok {
-									imageURLs = append(imageURLs, imageURL)
+									result.ImageURLs = append(result.ImageURLs, imageURL)
 								}
 							}
+						} else {
+							// 记录失败状态和错误信息
+							errMsg, _ := task["error_message"].(string)
+							if errMsg == "" {
+								errMsg, _ = task["message"].(string)
+							}
+							result.ErrDetail = fmt.Sprintf("task %s status: %s, error: %s", taskID, status, errMsg)
+							logger.Warnf(c.Request.Context(), "Task failed: %s", result.ErrDetail)
 						}
 					}
 				}
@@ -1839,7 +1853,12 @@ func pollTaskStatus(c *gin.Context, client cycletls.CycleTLS, taskIDs []string, 
 		}
 	}
 
-	return imageURLs
+	// 如果没有获取到图片URL，记录最后的响应数据
+	if len(result.ImageURLs) == 0 && result.ErrDetail == "" {
+		result.ErrDetail = fmt.Sprintf("no image URLs in response, last data: %s", lastData)
+	}
+
+	return result
 }
 
 func getBase64ByUrl(url string, cookie string) (string, error) {
