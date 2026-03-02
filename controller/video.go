@@ -5,13 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"genspark2api/common"
 	"genspark2api/common/config"
 	logger "genspark2api/common/loggger"
 	"genspark2api/model"
 	"github.com/deanxv/CycleTLS/cycletls"
 	"github.com/gin-gonic/gin"
-	"github.com/samber/lo"
 	"io"
 	"net/http"
 	"strings"
@@ -29,8 +27,8 @@ func VideosForOpenAI(c *gin.Context) {
 		return
 	}
 
-	if lo.Contains(common.VideoModelList, openAIReq.Model) == false {
-		c.JSON(400, gin.H{"error": "Invalid model"})
+	if openAIReq.Model == "" {
+		c.JSON(400, gin.H{"error": "model is required"})
 		return
 	}
 
