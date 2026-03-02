@@ -28,13 +28,13 @@ var DefaultOpenaiModelList = []string{
 	//"kimi-k2-instruct",
 	//"groq-kimi-k2-instruct",
 	"grok-4-0709",
-	"fal-ai/nano-banana",
-	"fal-ai/bytedance/seedream/v4",
-	"gpt-image-1",
-	"flux-pro/ultra",
-	"flux-pro/kontext/pro",
-	"imagen4",
 	"nano-banana-pro",
+	"nano-banana-2",
+	"fal-ai/gpt-image-1.5",
+	"fal-ai/bytedance/seedream/v5/lite",
+	"fal-ai/z-image/turbo",
+	"qwen-image",
+	"qwen-multiple-angles",
 	"sora-2",
 	"sora-2-pro",
 	"gemini/veo3",
@@ -82,13 +82,13 @@ var MixtureModelList = []string{
 }
 
 var ImageModelList = []string{
-	"fal-ai/nano-banana",
-	"fal-ai/bytedance/seedream/v4",
-	"gpt-image-1",
-	"flux-pro/ultra",
-	"flux-pro/kontext/pro",
-	"imagen4",
 	"nano-banana-pro",
+	"nano-banana-2",
+	"fal-ai/gpt-image-1.5",
+	"fal-ai/bytedance/seedream/v5/lite",
+	"fal-ai/z-image/turbo",
+	"qwen-image",
+	"qwen-multiple-angles",
 }
 
 var VideoModelList = []string{

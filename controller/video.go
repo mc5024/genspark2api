@@ -77,6 +77,14 @@ func VideoProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Vide
 		cookie, err = cookieManager.GetRandomCookie()
 		if err != nil {
 			logger.Errorf(ctx, "Failed to get initial cookie: %v", err)
+			// 检查是否所有 cookie 都因限速不可用
+			if hasRL, earliest := config.GetEarliestRateLimitInfo(); hasRL {
+				remaining := time.Until(earliest)
+				hours := int(remaining.Hours())
+				minutes := int(remaining.Minutes()) % 60
+				return nil, fmt.Errorf("所有账号均已达到速率限制，最早将在 %d小时%d分钟 后恢复（%s）",
+					hours, minutes, earliest.Format("2006-01-02 15:04:05"))
+			}
 			return nil, fmt.Errorf(errNoValidCookies)
 		}
 	}
@@ -540,7 +548,9 @@ func pollVideoTaskStatus(c *gin.Context, client cycletls.CycleTLS, taskIDs []str
 							if errMsg == "" {
 								errMsg, _ = task["message"].(string)
 							}
-							result.ErrDetail = fmt.Sprintf("task %s status: %s, error: %s", taskID, status, errMsg)
+							// 把整个 task 对象序列化，方便排查
+							taskJson, _ := json.Marshal(task)
+							result.ErrDetail = fmt.Sprintf("task %s status: %s, error: %s, full_task: %s", taskID, status, errMsg, string(taskJson))
 							logger.Warnf(c.Request.Context(), "Task failed: %s", result.ErrDetail)
 						}
 					}

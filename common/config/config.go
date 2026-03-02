@@ -224,6 +224,30 @@ func IsRateLimited(cookie string) bool {
 	return false
 }
 
+// GetEarliestRateLimitInfo 获取所有被限速 cookie 中最早的解除时间
+// 返回是否存在限速 cookie、最早的解除时间
+func GetEarliestRateLimitInfo() (bool, time.Time) {
+	var earliest time.Time
+	found := false
+	now := time.Now()
+
+	rateLimitCookies.Range(func(key, value interface{}) bool {
+		rlc, ok := value.(RateLimitCookie)
+		if !ok {
+			return true
+		}
+		if rlc.ExpirationTime.After(now) {
+			if !found || rlc.ExpirationTime.Before(earliest) {
+				earliest = rlc.ExpirationTime
+				found = true
+			}
+		}
+		return true
+	})
+
+	return found, earliest
+}
+
 func (cm *CookieManager) RemoveCookie(cookieToRemove string) error {
 	cm.mu.Lock()
 	defer cm.mu.Unlock()
