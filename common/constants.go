@@ -29,7 +29,7 @@ var DefaultOpenaiModelList = []string{
 	//"groq-kimi-k2-instruct",
 	"grok-4-0709",
 	"nano-banana-pro",
-	"nano-banana-2",
+	"fal-ai/nano-banana-2",
 	"fal-ai/gpt-image-1.5",
 	"fal-ai/bytedance/seedream/v5/lite",
 	"fal-ai/z-image/turbo",
@@ -83,7 +83,7 @@ var MixtureModelList = []string{
 
 var ImageModelList = []string{
 	"nano-banana-pro",
-	"nano-banana-2",
+	"fal-ai/nano-banana-2",
 	"fal-ai/gpt-image-1.5",
 	"fal-ai/bytedance/seedream/v5/lite",
 	"fal-ai/z-image/turbo",
