@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"genspark2api/common"
 	"genspark2api/common/config"
 	logger "genspark2api/common/loggger"
 	"genspark2api/model"
