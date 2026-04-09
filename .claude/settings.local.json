@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go build:*)",
+      "Bash(export PATH=\"/c/Program Files/Go/bin:/c/Go/bin:$PATH\")",
+      "Bash(where go:*)",
+      "Read(//c/Program Files/Go/**)",
+      "Read(//c/Go/**)"
+    ]
+  }
+}

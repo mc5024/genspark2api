@@ -399,7 +399,7 @@ func createRequestBody(c *gin.Context, client cycletls.CycleTLS, cookie string, 
 	return requestBody, nil
 }
 
-func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.OpenAIImagesGenerationRequest, chatId string) (map[string]interface{}, error) {
+func createImageRequestBody(c *gin.Context, client cycletls.CycleTLS, cookie string, openAIReq *model.OpenAIImagesGenerationRequest, chatId string) (map[string]interface{}, error) {
 
 	if openAIReq.Model == "dall-e-3" {
 		openAIReq.Model = "dalle-3"
@@ -446,35 +446,74 @@ func createImageRequestBody(c *gin.Context, cookie string, openAIReq *model.Open
 	if len(allImages) > 0 {
 		var contentItems []map[string]interface{}
 
-		// 处理每张图片
+		// 处理每张图片：上传到 Genspark 私有存储，使用 private_file 格式
 		for _, img := range allImages {
-			var base64Data string
+			var imgBytes []byte
 
 			if strings.HasPrefix(img, "http://") || strings.HasPrefix(img, "https://") {
 				// 下载文件
-				bytes, err := fetchImageBytes(img)
+				downloaded, err := fetchImageBytes(img)
 				if err != nil {
 					logger.Errorf(c.Request.Context(), fmt.Sprintf("fetchImageBytes err  %v\n", err))
 					continue
 				}
-
-				contentType := http.DetectContentType(bytes)
-				if strings.HasPrefix(contentType, "image/") {
-					base64Data = "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(bytes)
+				imgBytes = downloaded
+			} else {
+				// 尝试解析 base64
+				base64Str := img
+				if strings.Contains(img, ";base64,") {
+					base64Str = strings.Split(img, ";base64,")[1]
 				}
-			} else if common.IsImageBase64(img) {
-				if !strings.HasPrefix(img, "data:image") {
-					base64Data = "data:image/jpeg;base64," + img
-				} else {
-					base64Data = img
+				decoded, err := base64.StdEncoding.DecodeString(base64Str)
+				if err != nil {
+					logger.Errorf(c.Request.Context(), fmt.Sprintf("base64 decode err  %v\n", err))
+					continue
 				}
+				imgBytes = decoded
 			}
 
-			if base64Data != "" {
+			// 检测内容类型
+			contentType := http.DetectContentType(imgBytes)
+
+			if strings.HasPrefix(contentType, "image/") {
+				// 获取上传 URL
+				response, err := makeGetUploadUrlRequest(client, cookie)
+				if err != nil {
+					logger.Errorf(c.Request.Context(), fmt.Sprintf("makeGetUploadUrlRequest err  %v\n", err))
+					continue
+				}
+
+				var jsonResponse map[string]interface{}
+				if err := json.Unmarshal([]byte(response.Body), &jsonResponse); err != nil {
+					logger.Errorf(c.Request.Context(), fmt.Sprintf("Unmarshal upload url response err  %v\n", err))
+					continue
+				}
+
+				data, _ := jsonResponse["data"].(map[string]interface{})
+				uploadImageUrl, _ := data["upload_image_url"].(string)
+				privateStorageUrl, ok := data["private_storage_url"].(string)
+				if !ok || uploadImageUrl == "" {
+					logger.Errorf(c.Request.Context(), "Failed to extract upload_image_url or private_storage_url")
+					continue
+				}
+
+				// 上传图片
+				_, err = makeUploadRequest(client, uploadImageUrl, imgBytes)
+				if err != nil {
+					logger.Errorf(c.Request.Context(), fmt.Sprintf("makeUploadRequest err  %v\n", err))
+					continue
+				}
+
+				// 使用 private_file 格式
+				ext := strings.Split(contentType, "/")[1]
 				contentItems = append(contentItems, map[string]interface{}{
-					"type": "image_url",
-					"image_url": map[string]interface{}{
-						"url": base64Data,
+					"type": "private_file",
+					"private_file": map[string]interface{}{
+						"name":                "image." + ext,
+						"type":                contentType,
+						"size":                len(imgBytes),
+						"ext":                 ext,
+						"private_storage_url": privateStorageUrl,
 					},
 				})
 			}
@@ -1559,7 +1598,7 @@ func ImageProcess(c *gin.Context, client cycletls.CycleTLS, openAIReq model.Open
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		// Create request body
-		requestBody, err := createImageRequestBody(c, cookie, &openAIReq, chatId)
+		requestBody, err := createImageRequestBody(c, client, cookie, &openAIReq, chatId)
 		if err != nil {
 			logger.Errorf(ctx, "Failed to create request body: %v", err)
 			return nil, err
